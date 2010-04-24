@@ -16,8 +16,9 @@ files. To compile and install xt_ACCT, run
 In addition to the standard `configure` parameters you can specify
 the following:
 
-* --with-kernel=PATH - Path to kernel developement files.
-                       (defaults to ``/lib/modules/`uname -r`/build``).
+* --with-kernel=PATH -
+    Path to kernel developement files (defaults to
+    ``/lib/modules/`uname -r`/build``).
 * IPTABLES - Path to iptables binary.
 * IPTABLES_VERSION - Version of iptables.
 * IPTABLES_CFLAGS - C compiler flags for iptables.
