@@ -1,0 +1,4 @@
+# Makefile for the kernel.
+
+obj-m = ipt_ACCT.o ip6t_ACCT.o
+

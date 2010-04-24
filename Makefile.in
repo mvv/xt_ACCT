@@ -1,0 +1,126 @@
+# Makefile
+ 
+PACKAGE_NAME = @PACKAGE_NAME@
+PACKAGE_VERSION = @PACKAGE_VERSION@
+
+srcdir = @srcdir@
+abs_srcdir = @abs_srcdir@
+abs_builddir = @abs_builddir@
+prefix = @prefix@
+exec_prefix = @exec_prefix@
+sbindir = @sbindir@
+includedir = @includedir@
+
+KERNEL_DIR = @KERNEL_DIR@
+KERNEL_VERSION = @KERNEL_VERSION@
+
+IPTABLES_CFLAGS = @IPTABLES_CFLAGS@
+IPTABLES_LIBDIR = @IPTABLES_LIBDIR@
+
+@SET_MAKE@
+SHELL = @SHELL@
+SED = @SED@
+INSTALL = @INSTALL@
+INSTALL_PROGRAM = @INSTALL_PROGRAM@
+INSTALL_DATA = @INSTALL_DATA@
+INSTALL_MODULE = $(INSTALL_DATA)
+INSTALL_HEADER = $(INSTALL_DATA)
+MKDIR_P = @MKDIR_P@
+CC = @CC@
+CPPFLAGS = @CPPFLAGS@
+CFLAGS = @CFLAGS@ @DEFS@ -I$(abs_srcdir) -Wall
+LD = @LD@
+LDFLAGS = @LDFLAGS@
+
+KERNEL_CFLAGS := -DXT_ACCT_VERSION=\"$(PACKAGE_VERSION)\"
+KERNEL_CFLAGS := $(KERNEL_CFLAGS) -I$(abs_srcdir) -Wall
+
+.PHONY: all
+all: modules libs utils
+
+ipt_ACCT.c: $(srcdir)/xt_ACCT.c
+	$(SED) -e '1{s/^/#line 1 "xt_ACCT.c"\n/}' -e 's/@IPT_ACCT@/1/' $< > $@
+
+ip6t_ACCT.c: $(srcdir)/xt_ACCT.c
+	$(SED) -e '1{s/^/#line 1 "xt_ACCT.c"\n/}' -e 's/@IPT_ACCT@/0/' $< > $@
+
+.PHONY: modules
+modules: ipt_ACCT.c ip6t_ACCT.c
+	make -C $(KERNEL_DIR) M=$(abs_builddir) V=1 \
+	  EXTRA_CFLAGS="$(KERNEL_CFLAGS)" modules
+
+libipt_ACCT.c: $(srcdir)/libxt_ACCT.c
+	$(SED) -e '1{s/^/#line 1 "libxt_ACCT.c"\n/}' -e 's/@IPT_ACCT@/1/' \
+	  $< > $@
+
+libip6t_ACCT.c: $(srcdir)/libxt_ACCT.c
+	$(SED) -e '1{s/^/#line 1 "libxt_ACCT.c"\n/}' -e 's/@IPT_ACCT@/0/' \
+	  $< > $@
+
+libipt_ACCT.o: libipt_ACCT.c $(srcdir)/nf_xt_ACCT.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(IPTABLES_CFLAGS) -fPIC -c -o $@ $<
+
+libip6t_ACCT.o: libip6t_ACCT.c $(srcdir)/nf_xt_ACCT.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(IPTABLES_CFLAGS) -fPIC -c -o $@ $<
+
+libipt_ACCT.so: libipt_ACCT.o
+	$(LD) -shared -o $@ $<
+
+libip6t_ACCT.so: libip6t_ACCT.o
+	$(LD) -shared -o $@ $<
+
+.PHONY: libs
+libs: libipt_ACCT.so libip6t_ACCT.so
+
+xt_acct_ctl.o: $(srcdir)/xt_acct_ctl.c $(srcdir)/xt_ACCT.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
+xt_acct_ctl: xt_acct_ctl.o
+	$(CC) $(LDFLAGS) -o $@ $<
+
+.PHONY: utils
+utils: xt_acct_ctl
+
+.PHONY: install-modules
+install-modules: modules
+	$(MKDIR_P) "$(DESTDIR)/lib/modules/$(KERNEL_VERSION)/extra"
+	$(INSTALL_MODULE) ipt_ACCT.ko \
+	  "$(DESTDIR)/lib/modules/$(KERNEL_VERSION)/misc/ipt_ACCT.ko"
+	$(INSTALL_MODULE) ip6t_ACCT.ko \
+	  "$(DESTDIR)/lib/modules/$(KERNEL_VERSION)/misc/ip6t_ACCT.ko"
+
+.PHONY: install-utils
+install-utils: utils
+	$(MKDIR_P) "$(DESTDIR)$(sbindir)"
+	$(INSTALL_PROGRAM) xt_acct_ctl "$(DESTDIR)$(sbindir)/xt_acct_ctl"
+
+.PHONY: install-libs
+install-libs: libs
+	$(MKDIR_P) "$(DESTDIR)$(IPTABLES_LIBDIR)"
+	$(INSTALL_PROGRAM) libipt_ACCT.so \
+	  "$(DESTDIR)$(IPTABLES_LIBDIR)/libipt_ACCT.so"
+	$(INSTALL_PROGRAM) libip6t_ACCT.so \
+	  "$(DESTDIR)$(IPTABLES_LIBDIR)/libip6t_ACCT.so"
+
+.PHONY: install-headers
+install-headers: xt_ACCT.h
+	$(MKDIR_P) "$(DESTDIR)$(includedir)"
+	$(INSTALL_HEADER) $(srcdir)/xt_ACCT.h \
+	  "$(DESTDIR)$(includedir)/xt_ACCT.h"
+
+.PHONY: install
+install: install-modules install-utils install-libs install-headers
+
+.PHONY: clean
+clean:
+	$(MAKE) -C $(KERNEL_DIR) M=$(abs_builddir) clean
+	rm -f ipt_ACCT.c ip6t_ACCT.c libipt_ACCT.c libip6t_ACCT.c \
+	      libipt_ACCT.o libip6t_ACCT.o libipt_ACCT.so libip6t_ACCT.so \
+	      xt_acct_ctl.o xt_acct_ctl Module.markers Module.symvers
+
+.PHONY: clean
+vcs-clean: clean
+	rm -rf autom4te.cache
+	rm -f configure config.log config.status config.guess config.sub \
+	      aclocal.m4 install-sh Makefile Kbuild
+
