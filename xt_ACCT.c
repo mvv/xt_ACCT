@@ -583,7 +583,7 @@ static unsigned int xt_acct_target_handle(
 		goto no_th;
 
 	if (!(info->aggr_by
-	      & (XT_ACCT_AGGR_SPORT | XT_ACCT_AGGR_SPORT)))
+	      & (XT_ACCT_AGGR_SPORT | XT_ACCT_AGGR_DPORT)))
 		goto no_th;
 
 	switch (proto) {
