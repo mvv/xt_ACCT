@@ -1,8 +1,9 @@
+.*
 *~
-*.swp
 *.mod.c
 *.o
 *.ko
+*.so
 Module.markers
 Module.symvers
 aclocal.m4
@@ -16,3 +17,4 @@ ipt_ACCT.c
 ip6t_ACCT.c
 libipt_ACCT.c
 libip6t_ACCT.c
+xt_acct_ctl
