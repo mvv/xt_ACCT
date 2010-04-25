@@ -6,7 +6,7 @@
 Module.markers
 Module.symvers
 aclocal.m4
-atom4te.cache
+autom4te.cache
 configure
 config.*
 install-sh
