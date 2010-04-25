@@ -183,6 +183,7 @@ xt_acct_parse (int c, char **argv, int invert, unsigned int *flags,
     case '3': /* --aggr-by SPEC */
       s = optarg;
       error_p = 0;
+      info->aggr_by = 0;
 
       while (*s) {
           if (!strncmp(s, "src", 3))
@@ -262,13 +263,30 @@ xt_acct_parse (int c, char **argv, int invert, unsigned int *flags,
               info->aggr_by |= XT_ACCT_AGGR_DST;
             }
           else if (!strncmp (s, "sport", 5))
-            info->aggr_by |= XT_ACCT_AGGR_SPORT;
+            {
+              info->aggr_by |= XT_ACCT_AGGR_SPORT;
+              s += 5;
+            }
           else if (!strncmp (s, "dport", 5))
-            info->aggr_by |= XT_ACCT_AGGR_DPORT;
+            {
+              info->aggr_by |= XT_ACCT_AGGR_DPORT;
+              s += 5;
+            }
           else if (!strncmp (s, "proto", 5))
-            info->aggr_by |= XT_ACCT_AGGR_PROTO;
+            {
+              info->aggr_by |= XT_ACCT_AGGR_PROTO;
+              s += 5;
+            }
           else if (!strncmp (s, "conn", 4))
-            info->aggr_by |= XT_ACCT_AGGR_CONN;
+            {
+              info->aggr_by |= XT_ACCT_AGGR_CONN;
+              s += 4;
+            }
+          else
+            {
+              error_p = 1;
+              break;
+            }
 
           if (!*s)
             break;
