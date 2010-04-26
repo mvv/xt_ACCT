@@ -526,29 +526,29 @@ static unsigned int xt_acct_target_handle(
 	unsigned int ret = info->retcode;
 
 #if IPT_ACCT
-# define IP_HDR(skb) ip_hdr(skb)
-# define IP_PROTO(skb,iph,proto) ipv4_proto(skb, iph, proto)
+# define IP_HDR ip_hdr
+# define IP_PROTO ipv4_proto
 # define IP_SIZE(iph) ntohs((iph)->tot_len)
 # define IP_HASH ipv4_hash
 # define IP_ADDR_EQ(a1,a2) ((a1).s_addr == (a2).s_addr)
 # define IP_ADDR_COPY(a1,a2) \
 	((a2).s_addr = ((struct in_addr *) &(a1))->s_addr)
 # define IP_ADDR_MASK(addr,bits,mask) \
-	(bits == 32 ? (addr).s_addr : ((addr).s_addr &= (mask)))
+	((bits) == 32 ? (addr).s_addr : ((addr).s_addr &= (mask)))
 	struct iphdr *iph;
 	struct in_addr src = { .s_addr = 0 }, dst = { .s_addr = 0 };
 #else
-# define IP_HDR(skb) ipv6_hdr(skb)
+# define IP_HDR ipv6_hdr
 # define IP_PROTO ipv6_proto
 # define IP_SIZE(iph) \
-	(sizeof(struct ipv6hdr) + ntohl(iph->payload_len))
+	(sizeof(struct ipv6hdr) + ntohl((iph)->payload_len))
 # define IP_HASH ipv6_hash
 # define IP_ADDR_EQ(a1,a2)                              \
 	((a1).s6_addr32[0] == (a2).s6_addr32[0]         \
 	 && (a1).s6_addr32[1] == (a2).s6_addr32[1]      \
 	 && (a1).s6_addr32[2] == (a2).s6_addr32[2]      \
 	 && (a1).s6_addr32[3] == (a2).s6_addr32[3])
-# define IP_ADDR_COPY(a1, a2)                           \
+# define IP_ADDR_COPY(a1,a2)                            \
 	do {                                            \
 		(a2).s6_addr32[0] = (a1).s6_addr32[0];  \
 		(a2).s6_addr32[1] = (a1).s6_addr32[1];  \
@@ -1698,12 +1698,12 @@ struct xt_acct_cfg_pool_attr {
 }
 #endif
 
-#define XT_ACCT_POOL_ATTR_RW(_name)                                          \
-static struct xt_acct_cfg_pool_attr xt_acct_cfg_pool_attr_##_name =          \
-	__CONFIGFS_ATTR(_name, S_IRUGO | S_IWUSR,                            \
+#define XT_ACCT_POOL_ATTR_RW(_name)                                    \
+static struct xt_acct_cfg_pool_attr xt_acct_cfg_pool_attr_##_name =    \
+	__CONFIGFS_ATTR(_name, S_IRUGO | S_IWUSR,                      \
 	                show_##_name, store_##_name)
-#define XT_ACCT_POOL_ATTR_RO(_name)                                          \
-static struct xt_acct_cfg_pool_attr xt_acct_cfg_pool_attr_##_name =          \
+#define XT_ACCT_POOL_ATTR_RO(_name)                                    \
+static struct xt_acct_cfg_pool_attr xt_acct_cfg_pool_attr_##_name =    \
 	__CONFIGFS_ATTR(_name, S_IRUGO, show_##_name, NULL)
 
 XT_ACCT_POOL_ATTR_RW(enabled);
