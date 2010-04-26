@@ -451,12 +451,19 @@ static inline void ipv6_mask(struct in6_addr *addr, u8 bits, u32 mask)
 		;
 	else if (bits >= 96)
 		addr->s6_addr32[3] &= mask;
-	else if (bits >= 64)
+	else if (bits >= 64) {
 		addr->s6_addr32[2] &= mask;
-	else if (bits >= 32)
+		addr->s6_addr32[3] = 0;
+	} else if (bits >= 32) {
 		addr->s6_addr32[1] &= mask;
-	else
+		addr->s6_addr32[2] = 0;
+		addr->s6_addr32[3] = 0;
+	} else {
 		addr->s6_addr32[0] &= mask;
+		addr->s6_addr32[1] = 0;
+		addr->s6_addr32[2] = 0;
+		addr->s6_addr32[3] = 0;
+	}
 }
 #endif
 
