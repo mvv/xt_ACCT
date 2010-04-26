@@ -125,6 +125,13 @@ struct xt_acct_hash_bucket {
 
 struct xt_acct_pool_ref;
 
+struct xt_acct_target_kdata {
+	struct list_head list_node;
+	struct xt_acct_pool_ref *pool_ref;
+	u32 smask;
+	u32 dmask;
+};
+
 struct xt_acct_pool {
 	u16 id;
 	struct xt_acct_pool_ref *ref;
@@ -317,7 +324,7 @@ static void xt_acct_pool_ref_insert(struct xt_acct_pool_ref *ref)
 
 static struct xt_acct_pool_ref *
 xt_acct_pool_ref_create(u16 pool_id, struct xt_acct_pool *pool,
-                        struct xt_acct_target_info *info,
+                        struct xt_acct_target_kdata *kdata,
                         struct xt_acct_proc_pdata *pdata)
 {
 	struct xt_acct_pool_ref *ref;
@@ -331,7 +338,7 @@ xt_acct_pool_ref_create(u16 pool_id, struct xt_acct_pool *pool,
 
 		if (!ref) {
 			spin_unlock_bh(&pool_refs_lock);
-			if (info)
+			if (kdata)
 				printk(KERN_ERR KBUILD_MODNAME
 			          ": cannot allocate a pool reference\n");
 			return ERR_PTR(-ENOMEM);
@@ -350,10 +357,13 @@ xt_acct_pool_ref_create(u16 pool_id, struct xt_acct_pool *pool,
 
 		if (pool)
 			pool->ref = ref;
-		else if (info)
-			list_add(&info->kernel_data.list_node, &ref->targets);
-		else if (pdata)
+		else if (kdata) {
+			list_add(&kdata->list_node, &ref->targets);
+			kdata->pool_ref = ref;
+		} else if (pdata) {
 			list_add(&pdata->list_node, &ref->files);
+			pdata->pool_ref = ref;
+		}
 
 		xt_acct_pool_ref_insert(ref);
 	} else {
@@ -364,14 +374,16 @@ xt_acct_pool_ref_create(u16 pool_id, struct xt_acct_pool *pool,
 			ref->pool = pool;
 			pool->ref = ref;
 			spin_unlock_bh(&ref->pool_lock);
-		} else if (info) {
+		} else if (kdata) {
 			spin_lock_bh(&ref->targets_lock);
-			list_add(&info->kernel_data.list_node, &ref->targets);
+			list_add(&kdata->list_node, &ref->targets);
 			spin_unlock_bh(&ref->targets_lock);
+			kdata->pool_ref = ref;
 		} else if (pdata) {
 			spin_lock_bh(&ref->files_lock);
 			list_add(&pdata->list_node, &ref->files);
 			spin_unlock_bh(&ref->files_lock);
+			pdata->pool_ref = ref;
 		}
 	}
 
@@ -431,6 +443,20 @@ static inline unsigned int ipv6_hash(struct in6_addr *src,
 		conn_mark
 	};
 	return jhash2(words, ARRAY_SIZE(words), proto);
+}
+
+static inline void ipv6_mask(struct in6_addr *addr, u8 bits, u32 mask)
+{
+	if (bits == 128)
+		;
+	else if (bits >= 96)
+		addr->s6_addr32[3] &= mask;
+	else if (bits >= 64)
+		addr->s6_addr32[2] &= mask;
+	else if (bits >= 32)
+		addr->s6_addr32[1] &= mask;
+	else
+		addr->s6_addr32[0] &= mask;
 }
 #endif
 
@@ -495,6 +521,7 @@ static unsigned int xt_acct_target_handle(
 	struct xt_acct_target_info *info =
 		(struct xt_acct_target_info *) param->targinfo;
 #endif
+	struct xt_acct_target_kdata *kdata = info->kdata;
 	bool accounted = true;
 	unsigned int ret = info->retcode;
 
@@ -504,7 +531,10 @@ static unsigned int xt_acct_target_handle(
 # define IP_SIZE(iph) ntohs((iph)->tot_len)
 # define IP_HASH ipv4_hash
 # define IP_ADDR_EQ(a1,a2) ((a1).s_addr == (a2).s_addr)
-# define IP_ADDR_COPY(a1,a2) ((a2).s_addr = (u32) (a1))
+# define IP_ADDR_COPY(a1,a2) \
+	((a2).s_addr = ((struct in_addr *) &(a1))->s_addr)
+# define IP_ADDR_MASK(addr,bits,mask) \
+	(bits == 32 ? (addr).s_addr : ((addr).s_addr &= (mask)))
 	struct iphdr *iph;
 	struct in_addr src = { .s_addr = 0 }, dst = { .s_addr = 0 };
 #else
@@ -525,6 +555,7 @@ static unsigned int xt_acct_target_handle(
 		(a2).s6_addr32[2] = (a1).s6_addr32[2];  \
 		(a2).s6_addr32[3] = (a1).s6_addr32[3];  \
 	} while(0);
+# define IP_ADDR_MASK(addr,bits,mask) ipv6_mask(&(addr), (bits), (mask))
 	struct ipv6hdr *iph;
 	struct in6_addr src = IN6ADDR_ANY_INIT, dst = IN6ADDR_ANY_INIT;
 #endif
@@ -709,6 +740,12 @@ no_th:
 
 no_more_ct:
 #endif /* XT_ACCT_CT */
+
+	if (info->aggr_by & XT_ACCT_AGGR_SRC)
+		IP_ADDR_MASK(src, info->smask, kdata->smask);
+	if (info->aggr_by & XT_ACCT_AGGR_SRC)
+		IP_ADDR_MASK(dst, info->dmask, kdata->dmask);
+
 	size = IP_SIZE(iph);
 
 	if (info->add_llh_size)
@@ -716,7 +753,7 @@ no_more_ct:
 
 	i = IP_HASH(&src, &dst, sport, dport, proto, conn_mark);
 
-	ref = info->kernel_data.pool_ref;
+	ref = kdata->pool_ref;
 	pool = xt_acct_pool_ref_deref(ref);
 
 	if (!pool)
@@ -803,8 +840,8 @@ allocate_record:
 			bucket->list = node;
 		}
 
-		IP_ADDR_COPY(iph->saddr, record->src);
-		IP_ADDR_COPY(iph->daddr, record->dst);
+		IP_ADDR_COPY(src, record->src);
+		IP_ADDR_COPY(dst, record->dst);
 		record->sport = sport;
 		record->dport = dport;
 		record->proto = proto;
@@ -883,6 +920,7 @@ xt_acct_target_check(
 	struct xt_acct_target_info *info =
 		(struct xt_acct_target_info *) param->targinfo;
 #endif
+	struct xt_acct_target_kdata *kdata;
 	struct xt_acct_pool_ref *ref;
 
 	if (info->aggr_by & XT_ACCT_AGGR_SRC && info->smask > IP_MASK_MAX) {
@@ -930,12 +968,56 @@ xt_acct_target_check(
 		return 0;
 	}
 
-	ref = xt_acct_pool_ref_create(info->pool_id, NULL, info, NULL);
+	kdata = kzalloc(sizeof (struct xt_acct_target_kdata), GFP_KERNEL);
 
-	if (!ref)
+	if (!kdata) {
+		printk(KERN_ERR KBUILD_MODNAME
+		       ": cannot allocate target kernel data\n");
 		return 0;
+	}
 
-	info->kernel_data.pool_ref = ref;
+#define MASK32(bits) htonl((u32) 0xFFFFFFFF << (32 - (bits)))
+
+	if (info->aggr_by & XT_ACCT_AGGR_SRC) {
+#if IPT_ACCT
+		kdata->smask = MASK32(info->smask);
+#else
+		if (info->smask == 128)
+			;
+		else if (info->smask >= 96)
+			kdata->smask = MASK32(info->smask - 96);
+		else if (info->smask >= 64)
+			kdata->smask = MASK32(info->smask - 64);
+		else if (info->smask >= 32)
+			kdata->smask = MASK32(info->smask - 32);
+#endif
+	}
+
+	if (info->aggr_by & XT_ACCT_AGGR_DST) {
+#if IPT_ACCT
+		kdata->dmask = MASK32(info->dmask);
+#else
+		if (info->dmask == 128)
+			;
+		else if (info->dmask >= 96)
+			kdata->dmask = MASK32(info->dmask - 96);
+		else if (info->dmask >= 64)
+			kdata->dmask = MASK32(info->dmask - 64);
+		else if (info->dmask >= 32)
+			kdata->dmask = MASK32(info->dmask - 32);
+#endif
+	}
+
+#undef MASK32
+
+	info->kdata = kdata;
+	ref = xt_acct_pool_ref_create(info->pool_id, NULL, kdata, NULL);
+
+	if (!ref) {
+		kfree(kdata);
+		return 0;
+	}
+
 	return 1;
 }
 
@@ -958,11 +1040,14 @@ static void xt_acct_target_destroy(
 	struct xt_acct_target_info *info =
 		(struct xt_acct_target_info *) param->targinfo;
 #endif
-	struct xt_acct_pool_ref *ref = info->kernel_data.pool_ref;
+	struct xt_acct_target_kdata *kdata = info->kdata;
+	struct xt_acct_pool_ref *ref = kdata->pool_ref;
 
 	spin_lock_bh(&ref->targets_lock);
-	list_del(&info->kernel_data.list_node);
+	list_del(&kdata->list_node);
 	spin_unlock_bh(&ref->targets_lock);
+
+	kfree(kdata);
 
 	xt_acct_pool_ref_put(ref);
 }
@@ -1206,8 +1291,6 @@ static long xt_acct_proc_ioctl (struct file *file, unsigned int cmd,
 			write_unlock_bh(&pdata->setup_lock);
 			return -ENOMEM;
 		}
-
-		pdata->pool_ref = ref;
 
 		write_unlock_bh(&pdata->setup_lock);
 		return 0;

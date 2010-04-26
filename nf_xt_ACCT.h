@@ -20,8 +20,7 @@
 #define NF_XT_ACCT_H
 
 #ifdef __KERNEL__
-# include <linux/list.h>
-struct xt_acct_pool_ref;
+struct xt_acct_target_kdata;
 #endif
 
 #define XT_ACCT_AGGR_SRC   1
@@ -45,14 +44,9 @@ struct xt_acct_target_info
 	unsigned int unacct_retcode;
 	unsigned int retcode;
 	union {
-#ifdef __KERNEL__
-		struct {
-			struct list_head list_node;
-			struct xt_acct_pool_ref *pool_ref;
-		};
-#endif
-		u_int64_t __words[3];
-	} kernel_data;
+		struct xt_acct_target_kdata *kdata;
+		u_int64_t __pad;
+	};
 };
 
 #endif /* NF_XT_ACCT_H */
