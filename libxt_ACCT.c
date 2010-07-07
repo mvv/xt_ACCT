@@ -31,6 +31,13 @@
 # define IP_MASK_MAX 128
 #endif
 
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 34)
+# define __ALIGN_MASK(X,MASK) (((X) + (MASK)) & ~(MASK))
+# define ALIGN(X,A) __ALIGN_MASK(X, (typeof (X)) (A) - 1)
+#endif
+
 #ifdef IPTABLES14PLUS
 # include <xtables.h>
 # ifndef XTABLES_VERSION
