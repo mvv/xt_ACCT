@@ -4,6 +4,7 @@
 *.o
 *.ko
 *.so
+modules.order
 Module.markers
 Module.symvers
 aclocal.m4
