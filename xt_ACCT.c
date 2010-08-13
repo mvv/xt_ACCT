@@ -513,8 +513,10 @@ static unsigned int xt_acct_target_handle(
 # if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 19)
 		, void *user_info 
 # endif
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 35)
 		const struct xt_target_param *param
+#else
+		const struct xt_action_param *param
 #endif
 		)
 {
@@ -901,7 +903,8 @@ unlock_acct:
 }
 
 static
-#if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 23)
+#if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 23) \
+    || LINUX_VERSION_CODE >= KERNEL_VERSION (2, 6, 35)
 int
 #else
 bool
@@ -929,17 +932,26 @@ xt_acct_target_check(
 #endif
 	struct xt_acct_target_kdata *kdata;
 	struct xt_acct_pool_ref *ref;
+#if LINUX_VERSION_CODE < KERNEL_VERSION (2, 6, 35)
+# define SUCCESS_RET 1
+# define INVAL_RET 0
+# define NOMEM_RET 0
+#else
+# define SUCCESS_RET 0
+# define INVAL_RET -EINVAL
+# define NOMEM_RET -ENOMEM
+#endif
 
 	if (info->aggr_by & XT_ACCT_AGGR_SRC && info->smask > IP_MASK_MAX) {
 		printk(KERN_ERR KBUILD_MODNAME ": invalid source mask %u\n",
 		       info->smask);
-		return 0;
+		return INVAL_RET;
 	}
 
 	if (info->aggr_by & XT_ACCT_AGGR_DST && info->dmask > IP_MASK_MAX) {
 		printk(KERN_ERR KBUILD_MODNAME
 		       ": invalid destination mask %u\n", info->dmask);
-		return 0;
+		return INVAL_RET;
 	}
 
 	switch (info->unavail_retcode) {
@@ -950,7 +962,7 @@ xt_acct_target_check(
 	default:
 		printk(KERN_ERR KBUILD_MODNAME ": invalid return code %u\n",
 		       info->unavail_retcode);
-		return 0;
+		return INVAL_RET;
 	}
 
 	switch (info->unacct_retcode) {
@@ -961,7 +973,7 @@ xt_acct_target_check(
 	default:
 		printk(KERN_ERR KBUILD_MODNAME ": invalid return code %u\n",
 		       info->unacct_retcode);
-		return 0;
+		return INVAL_RET;
 	}
 
 	switch (info->retcode) {
@@ -972,7 +984,7 @@ xt_acct_target_check(
 	default:
 		printk(KERN_ERR KBUILD_MODNAME ": invalid return code %u\n",
 		       info->retcode);
-		return 0;
+		return INVAL_RET;
 	}
 
 	kdata = kzalloc(sizeof (struct xt_acct_target_kdata), GFP_KERNEL);
@@ -980,7 +992,7 @@ xt_acct_target_check(
 	if (!kdata) {
 		printk(KERN_ERR KBUILD_MODNAME
 		       ": cannot allocate target kernel data\n");
-		return 0;
+		return NOMEM_RET;
 	}
 
 #define MASK32(bits) htonl((u32) 0xFFFFFFFF << (32 - (bits)))
@@ -1022,10 +1034,14 @@ xt_acct_target_check(
 
 	if (!ref) {
 		kfree(kdata);
-		return 0;
+		return NOMEM_RET;
 	}
 
-	return 1;
+	return SUCCESS_RET;
+
+#undef NOMEM_RET
+#undef INVAL_RET
+#undef SUCCESS_RET
 }
 
 static void xt_acct_target_destroy(
