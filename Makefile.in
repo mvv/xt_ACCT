@@ -85,9 +85,9 @@ utils: xt_acct_ctl
 install-modules: modules
 	$(MKDIR_P) "$(DESTDIR)/lib/modules/$(KERNEL_VERSION)/extra"
 	$(INSTALL_MODULE) ipt_ACCT.ko \
-	  "$(DESTDIR)/lib/modules/$(KERNEL_VERSION)/misc/ipt_ACCT.ko"
+	  "$(DESTDIR)/lib/modules/$(KERNEL_VERSION)/extra/ipt_ACCT.ko"
 	$(INSTALL_MODULE) ip6t_ACCT.ko \
-	  "$(DESTDIR)/lib/modules/$(KERNEL_VERSION)/misc/ip6t_ACCT.ko"
+	  "$(DESTDIR)/lib/modules/$(KERNEL_VERSION)/extra/ip6t_ACCT.ko"
 
 .PHONY: install-utils
 install-utils: utils
